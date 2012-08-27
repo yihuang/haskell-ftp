@@ -16,16 +16,26 @@ data Mode = Passive | Active
 data DataType = ASCII | Binary
 
 data FTPState m = FTPState
-  { fromClient  :: ResumableSource m ByteString
-  , toClient    :: Sink ByteString m ()
-  , mode        :: Mode
-  , dataType    :: DataType
-  , remote      :: SockAddr
-  , local       :: SockAddr
+  { ftpSource   :: ResumableSource m ByteString
+  , ftpSink     :: Sink ByteString m ()
+  , ftpRemote   :: SockAddr
+  , ftpLocal    :: SockAddr
+  , ftpMode     :: Mode
+  , ftpDataType :: DataType
   }
 
-defaultFTPState :: ResumableSource m ByteString -> Sink ByteString m () -> SockAddr -> SockAddr -> FTPState m
-defaultFTPState src snk remote local = FTPState src snk Passive ASCII remote local
+defaultFTPState :: ResumableSource m ByteString
+                -> Sink ByteString m ()
+                -> SockAddr
+                -> SockAddr
+                -> FTPState m
+defaultFTPState src snk remote local =
+    FTPState src
+             snk
+             remote
+             local
+             Passive
+             ASCII
 
 newtype FTP m a = FTP { unFTP :: StateT (FTPState m) m a }
     deriving (Functor, Monad, MonadIO)
@@ -39,8 +49,8 @@ runFTP s m = runStateT (unFTP m) s
 withClient :: Monad m => (ResumableSource m ByteString -> FTP m (ResumableSource m ByteString, a)) -> FTP m a
 withClient f = do
     st <- FTP get
-    (fromClient', r) <- f (fromClient st)
-    FTP $ put st{ fromClient = fromClient' }
+    (src, r) <- f (ftpSource st)
+    FTP $ put st{ ftpSource = src }
     return r
 
 wait :: Monad m => Sink ByteString m b -> FTP m b
@@ -67,7 +77,7 @@ expect s = do
 
 send :: Monad m => ByteString -> FTP m ()
 send s = do
-    snk <- FTP $ gets toClient
+    snk <- FTP $ gets ftpSink
     lift (yield s $$ snk)
 
 reply :: Monad m => ByteString -> ByteString -> FTP m ()

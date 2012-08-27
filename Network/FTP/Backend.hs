@@ -6,7 +6,7 @@ import BasicPrelude
 
 import Data.Conduit
 
-class (Functor m, Monad m) => FTPBackend m where
+class (Functor m, Monad m, MonadIO m) => FTPBackend m where
     type UserId m
 
     ftplog        :: ByteString -> m ()
