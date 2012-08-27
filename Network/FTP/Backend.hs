@@ -1,18 +1,18 @@
 {-# LANGUAGE TypeFamilies #-}
-module Network.FTP.Class where
+module Network.FTP.Backend where
 
 import qualified Prelude as P
 import BasicPrelude
 
 import Data.Conduit
 
-class Monad m => FTPBackend m where
-    type UserId
+class (Functor m, Monad m) => FTPBackend m where
+    type UserId m
 
     ftplog        :: ByteString -> m ()
 
-    authenticate  :: ByteString -> ByteString -> m Bool
-    authenticated :: m Bool
+    authenticate  :: ByteString -> ByteString -> m (Maybe (UserId m))
+    authenticated :: m (Maybe (UserId m))
 
     cwd           :: ByteString -> m ()
     pwd           :: m ByteString

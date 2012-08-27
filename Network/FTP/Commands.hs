@@ -3,48 +3,53 @@ module Network.FTP.Commands where
 
 import qualified Prelude
 import BasicPrelude
+import Data.Maybe
 import Control.Monad.Trans.State
 import qualified Data.CaseInsensitive as CI
 import Network.FTP.Monad
-import Network.FTP.Class
+import Network.FTP.Backend
 
-type Command m = ByteString -> FTP m ()
+type Command m = ByteString -> FTP m Bool
 
-cmd_user :: Monad m => Command m
+cmd_user :: FTPBackend m => Command m
 cmd_user name = do
-    b <- FTP (gets authed)
+    b <- isJust <$> lift authenticated
     if b
-      then reply "530" "Command not possible in authenticated state."
-      else do
+    then reply "530" "Command not possible in authenticated state."
+    else do
         reply "331" "User name accepted; send password."
         pass <- wait (expect "PASS")
-        if pass==name
-          then do
-              FTP $ modify $ \st -> st { authed = True }
-              reply "230" "login successful."
-          else reply "530" "incorrect password."
+        b <- lift (isJust <$> authenticate name pass)
+        if b then reply "230" "login successful."
+             else reply "530" "incorrect password."
+    return True
 
-login_required :: Monad m => Command m -> Command m
+login_required :: FTPBackend m => Command m -> Command m
 login_required cmd arg = do
-    b <- FTP (gets authed)
+    b <- isJust <$> lift authenticated
     if b
       then cmd arg
-      else reply "530" "Command not possible in non-authenticated state."
+      else do
+           reply "530" "Command not possible in non-authenticated state."
+           return True
 
-cmd_cwd dir = FTP (modify $ \st -> st{ directory = dir })
+cmd_cwd dir = do
+    lift (cwd dir)
+    return True
 
 cmd_pwd _ = do
-    d <- FTP (gets directory)
+    d <- lift pwd
     reply "257" $ "\"" ++ d ++ "\" is the current working directory."
+    return True
 
---cmd_pasv _ = do
---    lift list
+cmd_pasv _ = do
+    lift list
 
-commands :: Monad m => [(ByteString, Command m)]
+commands :: FTPBackend m => [(ByteString, Command m)]
 commands =
     [("USER", cmd_user)
-    ,("PASS", const $ reply "530" "Out of sequence PASS command")
-    ,("QUIT", const $ reply "221" "OK, Goodbye." >> fail "connection closed.")
+    ,("PASS", const $ reply "530" "Out of sequence PASS command" >> return True)
+    ,("QUIT", const $ reply "221" "OK, Goodbye." >> return False)
     --,(Command "HELP" (help,             help_help))
     ,("CWD",  login_required cmd_cwd)
     ,("PWD",  login_required cmd_pwd)
@@ -68,9 +73,11 @@ commands =
     --,(Command "NLST" (login_required cmd_nlst,  help_nlst))
     ]
 
-commandLoop :: Monad m => FTP m ()
+commandLoop :: FTPBackend m => FTP m ()
 commandLoop = do
     (cmd, arg) <- wait $ getCommand
     case lookup cmd commands of
-        Just cmd' -> cmd' arg >> commandLoop
-        Nothing  -> reply "502" $ "Unrecognized command " ++ cmd
+        Just cmd' -> do
+            continue <- cmd' arg
+            when continue commandLoop
+        Nothing -> reply "502" $ "Unrecognized command " ++ cmd

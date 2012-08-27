@@ -10,6 +10,8 @@ import Data.Conduit
 import Control.Monad.Trans
 import Control.Monad.Trans.State
 
+import Network.Socket (SockAddr)
+
 data Mode = Passive | Active
 data DataType = ASCII | Binary
 
@@ -18,13 +20,12 @@ data FTPState m = FTPState
   , toClient    :: Sink ByteString m ()
   , mode        :: Mode
   , dataType    :: DataType
-
-  , authed      :: Bool
-  , directory   :: ByteString
+  , remote      :: SockAddr
+  , local       :: SockAddr
   }
 
-defaultFTPState :: ResumableSource m ByteString -> Sink ByteString m () -> ByteString -> FTPState m
-defaultFTPState src snk dir = FTPState src snk Passive ASCII False dir
+defaultFTPState :: ResumableSource m ByteString -> Sink ByteString m () -> SockAddr -> SockAddr -> FTPState m
+defaultFTPState src snk remote local = FTPState src snk Passive ASCII remote local
 
 newtype FTP m a = FTP { unFTP :: StateT (FTPState m) m a }
     deriving (Functor, Monad, MonadIO)
