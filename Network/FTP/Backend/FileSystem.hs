@@ -11,6 +11,7 @@ import qualified Prelude
 import BasicPrelude
 import qualified System.Posix.Directory as Dir
 import qualified System.IO as IO
+import System.Directory (getDirectoryContents, removeFile, removeDirectory, createDirectory, renameFile)
 import Filesystem.Path.CurrentOS
 
 import Control.Monad.Trans.State
@@ -96,7 +97,27 @@ instance FTPBackend FSBackend where
         dir' <- lift (makeAbsolute dir)
         C.sourceCmd $ "ls -l " ++ encodeString dir'
 
-    remove name = return ()
+    nlst dir = do
+        dir'  <- lift (makeAbsolute dir)
+        paths <- liftIO $ getDirectoryContents (encodeString dir')
+        C.sourceList $ map (S.pack . (++"\n")) paths
+
+    mkd dir = do
+        dir' <- makeAbsolute dir
+        liftIO $ createDirectory (encodeString dir')
+        return dir'
+
+    dele name =
+        makeAbsolute name >>= liftIO . removeFile . encodeString
+
+    rename fname tname = do
+        fname' <- makeAbsolute fname
+        tname' <- makeAbsolute tname
+        liftIO $ renameFile (encodeString fname') (encodeString tname')
+
+    rmd dir = do
+        dir' <- makeAbsolute dir
+        liftIO $ removeDirectory (encodeString dir')
 
     download name =
         lift (makeAbsolute name) >>= C.sourceFile . encodeString

@@ -140,13 +140,17 @@ cmd_list :: FTPBackend m => Command m
 cmd_list dir =
     runTransfer $ \src snk -> list (decode dir) $$ snk
 
+cmd_nlst :: FTPBackend m => Command m
+cmd_nlst dir =
+    runTransfer $ \src snk -> nlst (decode dir) $$ snk
+
 cmd_noop :: FTPBackend m => Command m
 cmd_noop _ = reply "200" "OK" >> return True
 
 cmd_dele :: FTPBackend m => Command m
 cmd_dele "" = reply "501" "Filename required" >> return True
 cmd_dele name = do
-    lift (remove (decode name))
+    lift (dele (decode name))
     reply "250" $ "File " ++ name ++ " deleted."
     return True
 
@@ -163,6 +167,69 @@ cmd_stor name =
 cmd_syst :: FTPBackend m => Command m
 cmd_syst _ = reply "215" "UNIX Type: L8" >> return True
 
+cmd_mkd :: FTPBackend m => Command m
+cmd_mkd ""  = reply "501" "Directory name required" >> return True
+cmd_mkd dir = do
+    path <- lift (mkd (decode dir))
+    reply "257" $ "\"" ++ encode path ++ "\" created."
+    return True
+
+cmd_rnfr, cmd_rnto :: FTPBackend m => Command m
+cmd_rnfr ""   = reply "501" "Filename required" >> return True
+cmd_rnfr name = do
+    FTP $ modify $ \st -> st { ftpRename = Just (decode name) }
+    reply "350" $ "Noted rename from "++name++"; please send RNTO."
+    return True
+
+cmd_rnto ""   = reply "501" "Filename required" >> return True
+cmd_rnto name = do
+    mfromname <- FTP (gets ftpRename)
+    case mfromname of
+        Nothing ->
+            reply "503" "RNFR required before RNTO"
+        Just fromname -> do
+            FTP $ modify $ \st -> st { ftpRename = Nothing }
+            lift (rename fromname (decode name))
+            reply "250" $ "File "++encode fromname++" renamed to "++name
+    return True
+
+cmd_rmd :: FTPBackend m => Command m
+cmd_rmd ""   = reply "501" "Filename required" >> return True
+cmd_rmd dir = do
+    lift (rmd (decode dir))
+    reply "250" $ "Directory " ++ dir ++ " removed."
+    return True
+
+cmd_stat :: FTPBackend m => Command m
+cmd_stat _ = do
+    st <- FTP get
+    auth <- lift authenticated
+    reply "211" $ S.pack $ P.unlines
+         [" *** Sever statistics and information"
+         ," *** Please type HELP for more details"
+         ,""
+         ,"Server Software     : haskell-ftp, https://github.com/yihuang/haskell-ftp"
+         ,"Connected From      : ", P.show (ftpRemote st)
+         ,"Connected To        : ", P.show (ftpLocal st)
+         ,"Data Transfer Type  : ", P.show (ftpDataType st)
+         ,"Auth Status         : ", P.show auth
+         ,"End of status."
+         ]
+    return True
+
+cmd_mode, cmd_stru :: FTPBackend m => Command m
+cmd_mode m = do
+    case m of
+        "S" -> reply "200" "Mode is Stream."
+        _   -> reply "504" $ "Mode \"" ++ m ++ "\" not supported."
+    return True
+
+cmd_stru s = do
+    case s of
+        "F" -> reply "200" "Structure is File."
+        _   -> reply "504" $ "Structure \"" ++ s ++ "\" not supported."
+    return True
+
 commands :: FTPBackend m => [(ByteString, Command m)]
 commands =
     [("USER", cmd_user)
@@ -176,19 +243,19 @@ commands =
     ,("PORT", login_required cmd_port)
     ,("LIST", login_required cmd_list)
     ,("TYPE", login_required cmd_type)
-    --,("MKD",  login_required cmd_mkd)
+    ,("MKD",  login_required cmd_mkd)
     ,("NOOP", login_required cmd_noop)
-    --,(Command "RNFR" (login_required cmd_rnfr,  help_rnfr))
-    --,(Command "RNTO" (login_required cmd_rnto,  help_rnto))
+    ,("RNFR", login_required cmd_rnfr)
+    ,("RNTO", login_required cmd_rnto)
     ,("DELE", login_required cmd_dele)
-    --,(Command "RMD"  (login_required cmd_rmd,   help_rmd))
-    --,(Command "MODE" (login_required cmd_mode,  help_mode))
-    --,(Command "STRU" (login_required cmd_stru,  help_stru))
+    ,("RMD",  login_required cmd_rmd)
     ,("RETR", login_required cmd_retr)
     ,("STOR", login_required cmd_stor)
-    --,(Command "STAT" (login_required cmd_stat,  help_stat))
+    ,("STAT", login_required cmd_stat)
     ,("SYST", login_required cmd_syst)
-    --,(Command "NLST" (login_required cmd_nlst,  help_nlst))
+    ,("NLST", login_required cmd_nlst)
+    ,("MODE", login_required cmd_mode)
+    ,("STRU", login_required cmd_stru)
     ]
 
 commandLoop :: FTPBackend m => FTP m ()

@@ -30,6 +30,7 @@ data FTPState m = FTPState
   , ftpLocal    :: SockAddr
   , ftpChannel  :: DataChannel
   , ftpDataType :: DataType
+  , ftpRename   :: Maybe FilePath
   }
 
 defaultFTPState :: ResumableSource m ByteString
@@ -44,6 +45,7 @@ defaultFTPState src snk remote local =
              local
              NoChannel
              ASCII
+             Nothing
 
 newtype FTP m a = FTP { unFTP :: StateT (FTPState m) m a }
     deriving (Functor, Applicative, Monad, MonadIO)

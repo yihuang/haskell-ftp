@@ -7,7 +7,7 @@ import BasicPrelude
 import Control.Monad.Trans.Control
 import Data.Conduit
 
-class (Functor m, Monad m, MonadIO m, MonadBaseControl IO m) => FTPBackend m where
+class (Functor m, Monad m, MonadIO m, MonadBaseControl IO m, Show (UserId m)) => FTPBackend m where
     type UserId m
 
     ftplog        :: ByteString -> m ()
@@ -18,7 +18,11 @@ class (Functor m, Monad m, MonadIO m, MonadBaseControl IO m) => FTPBackend m whe
     cwd           :: FilePath -> m ()
     pwd           :: m FilePath
     list          :: FilePath -> Source m ByteString
+    nlst          :: FilePath -> Source m ByteString
+    mkd           :: FilePath -> m FilePath
+    dele          :: FilePath -> m ()
+    rmd           :: FilePath -> m ()
+    rename        :: FilePath -> FilePath -> m ()
 
-    remove        :: FilePath -> m ()
     download      :: FilePath -> Source m ByteString
     upload        :: FilePath -> Sink ByteString m ()
