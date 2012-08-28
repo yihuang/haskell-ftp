@@ -35,8 +35,8 @@ cmd_user :: FTPBackend m => Command m
 cmd_user name = do
     b <- isJust <$> lift authenticated
     if b
-    then reply "530" "Command not possible in authenticated state."
-    else do
+      then reply "530" "Command not possible in authenticated state."
+      else do
         reply "331" "User name accepted; send password."
         pass <- wait (expect "PASS")
         b' <- lift (isJust <$> authenticate name pass)

@@ -44,7 +44,7 @@ cabal-version:       >=1.8
 
 library
   -- Modules exported by the library.
-  exposed-modules:     Ftp, Test, Network.FTP.Backend, Network.FTP.Server, Network.FTP.Socket, Network.FTP.Monad, Network.FTP.Commands, Network.FTP.Backend.FileSystem
+  exposed-modules:     Network.FTP.Backend, Network.FTP.Server, Network.FTP.Socket, Network.FTP.Monad, Network.FTP.Commands, Network.FTP.Backend.FileSystem
   
   -- Modules included in this library but not exported.
   -- other-modules:       
