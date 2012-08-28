@@ -15,10 +15,10 @@ class (Functor m, Monad m, MonadIO m, MonadBaseControl IO m) => FTPBackend m whe
     authenticate  :: ByteString -> ByteString -> m (Maybe (UserId m))
     authenticated :: m (Maybe (UserId m))
 
-    cwd           :: ByteString -> m ()
-    pwd           :: m ByteString
-    list          :: ByteString -> Source m ByteString
+    cwd           :: FilePath -> m ()
+    pwd           :: m FilePath
+    list          :: FilePath -> Source m ByteString
 
-    remove        :: ByteString -> m ()
-    download      :: ByteString -> Source m ByteString
-    upload        :: ByteString -> Sink ByteString m ()
+    remove        :: FilePath -> m ()
+    download      :: FilePath -> Source m ByteString
+    upload        :: FilePath -> Sink ByteString m ()

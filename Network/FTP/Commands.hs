@@ -3,6 +3,7 @@ module Network.FTP.Commands where
 
 import qualified Prelude as P
 import BasicPrelude
+import Filesystem.Path.CurrentOS
 
 import Control.Monad.Trans.State (get, gets, put, modify)
 import qualified Control.Exception.Lifted as Lifted
@@ -45,14 +46,14 @@ cmd_user name = do
 
 cmd_cwd, cmd_cdup, cmd_pwd :: FTPBackend m => Command m
 cmd_cwd dir = do
-    lift (cwd dir)
+    lift (cwd (decode dir))
     dir' <- lift pwd
-    reply "250" $ "New directory now " ++ dir'
+    reply "250" $ "New directory now " ++ encode dir'
     return True
 cmd_cdup _ = cmd_cwd ".."
 cmd_pwd _ = do
     d <- lift pwd
-    reply "257" $ "\"" ++ d ++ "\" is the current working directory."
+    reply "257" $ "\"" ++ encode d ++ "\" is the current working directory."
     return True
 
 cmd_type :: FTPBackend m => Command m
@@ -137,7 +138,7 @@ runTransfer app = do
 
 cmd_list :: FTPBackend m => Command m
 cmd_list dir =
-    runTransfer $ \src snk -> list dir $$ snk
+    runTransfer $ \src snk -> list (decode dir) $$ snk
 
 cmd_noop :: FTPBackend m => Command m
 cmd_noop _ = reply "200" "OK" >> return True
@@ -145,19 +146,19 @@ cmd_noop _ = reply "200" "OK" >> return True
 cmd_dele :: FTPBackend m => Command m
 cmd_dele "" = reply "501" "Filename required" >> return True
 cmd_dele name = do
-    lift (remove name)
+    lift (remove (decode name))
     reply "250" $ "File " ++ name ++ " deleted."
     return True
 
 cmd_retr :: FTPBackend m => Command m
 cmd_retr "" = reply "501" "Filename required" >> return True
 cmd_retr name =
-    runTransfer $ \src snk -> download name $$ snk
+    runTransfer $ \src snk -> download (decode name) $$ snk
 
 cmd_stor :: FTPBackend m => Command m
 cmd_stor ""   = reply "501" "Filename required" >> return True
 cmd_stor name =
-    runTransfer $ \src snk -> src $$ upload name
+    runTransfer $ \src snk -> src $$ upload (decode name)
 
 cmd_syst :: FTPBackend m => Command m
 cmd_syst _ = reply "215" "UNIX Type: L8" >> return True

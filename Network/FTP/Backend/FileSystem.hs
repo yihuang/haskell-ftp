@@ -3,13 +3,15 @@
            , TypeFamilies
            , MultiParamTypeClasses
            , CPP
+           , ViewPatterns
            #-}
 module Network.FTP.Backend.FileSystem where
 
-import BasicPrelude (lift, when, ByteString, Applicative, (<$>), liftM, intersperse)
+import qualified Prelude
+import BasicPrelude
 import qualified System.Posix.Directory as Dir
 import qualified System.IO as IO
-import System.FilePath
+import Filesystem.Path.CurrentOS
 
 import Control.Monad.Trans.State
 import Control.Monad.IO.Class
@@ -51,12 +53,17 @@ runFSBackend :: FSState -> FSBackend a -> IO a
 runFSBackend st m = runResourceT $ evalStateT (unFSBackend m) st
 
 dropHeadingPathSeparator :: FilePath -> FilePath
+dropHeadingPathSeparator = decode . drop' . encode
+  where
+    drop' :: ByteString -> ByteString
+    drop' s =
+        case S.uncons s of
 #ifdef mingw32_HOST_OS
-dropHeadingPathSeparator ('\\':p) = p
+            Just ('\\', s') -> s'
 #else
-dropHeadingPathSeparator ('/':p)  = p
+            Just ('/',  s') -> s'
 #endif
-dropHeadingPathSeparator p = p
+            _               -> s
 
 currentDirectory :: FSBackend FilePath
 currentDirectory =
@@ -66,7 +73,7 @@ makeAbsolute :: FilePath -> FSBackend FilePath
 makeAbsolute path = do
     b <- FSBackend (gets base)
     d <- FSBackend (gets dir)
-    return $ normalise $ b </> dropHeadingPathSeparator (d </> path)
+    return $ b </> dropHeadingPathSeparator (d </> path)
 
 instance FTPBackend FSBackend where
     type UserId FSBackend = ByteString
@@ -80,19 +87,19 @@ instance FTPBackend FSBackend where
 
     authenticated   = FSBackend (gets user)
 
-    cwd ".." = FSBackend (modify $ \st -> st{dir = takeDirectory (dir st)})
-    cwd d    = FSBackend (modify $ \st -> st{dir = dir st </> dropTrailingPathSeparator (S.unpack d)})
+    cwd ".." = FSBackend (modify $ \st -> st{dir = parent (dir st)})
+    cwd d    = FSBackend (modify $ \st -> st{dir = dir st </> d})
 
-    pwd   = S.pack <$> currentDirectory
+    pwd   = currentDirectory
 
     list dir = do
-        dir' <- lift (makeAbsolute (S.unpack dir))
-        C.sourceCmd $ "ls -l " ++ dir'
+        dir' <- lift (makeAbsolute dir)
+        C.sourceCmd $ "ls -l " ++ encodeString dir'
 
     remove name = return ()
 
     download name =
-        lift (makeAbsolute (S.unpack name)) >>= C.sourceFile
+        lift (makeAbsolute name) >>= C.sourceFile . encodeString
 
     upload   name =
-        lift (makeAbsolute (S.unpack name)) >>= C.sinkFile
+        lift (makeAbsolute name) >>= C.sinkFile . encodeString
