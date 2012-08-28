@@ -1,12 +1,15 @@
-{-# LANGUAGE NoImplicitPrelude
-           , GeneralizedNewtypeDeriving
+{-# LANGUAGE GeneralizedNewtypeDeriving
            , OverloadedStrings
            , TypeFamilies
            , MultiParamTypeClasses
+           , CPP
            #-}
 module Network.FTP.Backend.FileSystem where
 
-import BasicPrelude
+import BasicPrelude (lift, when, ByteString, Applicative, (<$>), liftM, intersperse)
+import qualified System.Posix.Directory as Dir
+import qualified System.IO as IO
+import System.FilePath
 
 import Control.Monad.Trans.State
 import Control.Monad.IO.Class
@@ -17,52 +20,79 @@ import qualified Data.ByteString.Char8 as S
 import Data.Conduit
 import qualified Data.Conduit.List as C
 import qualified Data.Conduit.Binary as C
+import qualified Data.Conduit.Util as C
+import qualified Data.Conduit.Process as C
 
 import Network.FTP.Backend
 
-data FilesystemState = FilesystemState
-  { user :: Maybe (UserId FilesystemBackend)
-  , base :: ByteString
-  , dir  :: ByteString
+data FSState = FSState
+  { user :: Maybe (UserId FSBackend)
+  , base :: FilePath
+  , dir  :: FilePath
   }
 
-defaultFilesystemState :: ByteString -> FilesystemState
-defaultFilesystemState base = FilesystemState Nothing base "/"
+defaultFSState :: FilePath -> FSState
+defaultFSState base = FSState Nothing base "/"
 
-newtype FilesystemBackend a = FilesystemBackend { unFilesystemBackend :: StateT FilesystemState (ResourceT IO) a }
+newtype FSBackend a = FSBackend { unFSBackend :: StateT FSState (ResourceT IO) a }
     deriving ( Functor, Applicative, Monad, MonadIO
              , MonadUnsafeIO, MonadThrow, MonadResource
              )
 
-instance MonadBase IO FilesystemBackend where
-    liftBase = FilesystemBackend . liftBase
+instance MonadBase IO FSBackend where
+    liftBase = FSBackend . liftBase
 
-instance MonadBaseControl IO FilesystemBackend where
-    newtype StM FilesystemBackend a = FilesystemBackendStM { unFilesystemBackendStM :: StM (StateT FilesystemState (ResourceT IO)) a }
-    liftBaseWith f = FilesystemBackend . liftBaseWith $ \runInBase -> f $ liftM FilesystemBackendStM . runInBase . unFilesystemBackend
-    restoreM = FilesystemBackend . restoreM . unFilesystemBackendStM
+instance MonadBaseControl IO FSBackend where
+    newtype StM FSBackend a = FSBackendStM { unFSBackendStM :: StM (StateT FSState (ResourceT IO)) a }
+    liftBaseWith f = FSBackend . liftBaseWith $ \runInBase -> f $ liftM FSBackendStM . runInBase . unFSBackend
+    restoreM = FSBackend . restoreM . unFSBackendStM
 
-runFilesystemBackend :: FilesystemState -> FilesystemBackend a -> IO a
-runFilesystemBackend st m = runResourceT $ evalStateT (unFilesystemBackend m) st
+runFSBackend :: FSState -> FSBackend a -> IO a
+runFSBackend st m = runResourceT $ evalStateT (unFSBackend m) st
 
-instance FTPBackend FilesystemBackend where
-    type UserId FilesystemBackend = ByteString
+dropHeadingPathSeparator :: FilePath -> FilePath
+#ifdef mingw32_HOST_OS
+dropHeadingPathSeparator ('\\':p) = p
+#else
+dropHeadingPathSeparator ('/':p)  = p
+#endif
+dropHeadingPathSeparator p = p
+
+currentDirectory :: FSBackend FilePath
+currentDirectory =
+    FSBackend (gets dir)
+
+makeAbsolute :: FilePath -> FSBackend FilePath
+makeAbsolute path = do
+    b <- FSBackend (gets base)
+    d <- FSBackend (gets dir)
+    return $ normalise $ b </> dropHeadingPathSeparator (d </> path)
+
+instance FTPBackend FSBackend where
+    type UserId FSBackend = ByteString
 
     ftplog  = liftIO . S.putStrLn
 
     authenticate user pass = do
         when (user==pass) $
-             FilesystemBackend (modify $ \st -> st{user=Just user})
+             FSBackend (modify $ \st -> st{user=Just user})
         authenticated
 
-    authenticated   = FilesystemBackend (gets user)
+    authenticated   = FSBackend (gets user)
 
-    cwd dir = FilesystemBackend (modify $ \st -> st{dir=dir})
-    pwd     = FilesystemBackend (gets dir)
+    cwd ".." = FSBackend (modify $ \st -> st{dir = takeDirectory (dir st)})
+    cwd d    = FSBackend (modify $ \st -> st{dir = dir st </> dropTrailingPathSeparator (S.unpack d)})
 
-    list dir  = C.sourceList ["list"]
+    pwd   = S.pack <$> currentDirectory
+
+    list dir = do
+        dir' <- lift (makeAbsolute (S.unpack dir))
+        C.sourceCmd $ "ls -l " ++ dir'
+
     remove name = return ()
 
-    --download = C.sourceFile . S.unpack
-    download name = C.sourceList [name, "hello", "world"]
-    upload        = C.sinkFile . S.unpack
+    download name =
+        lift (makeAbsolute (S.unpack name)) >>= C.sourceFile
+
+    upload   name =
+        lift (makeAbsolute (S.unpack name)) >>= C.sinkFile

@@ -43,11 +43,13 @@ cmd_user name = do
              else reply "530" "incorrect password."
     return True
 
-cmd_cwd, cmd_pwd :: FTPBackend m => Command m
+cmd_cwd, cmd_cdup, cmd_pwd :: FTPBackend m => Command m
 cmd_cwd dir = do
     lift (cwd dir)
-    reply "250" $ "New directory now " ++ dir
+    dir' <- lift pwd
+    reply "250" $ "New directory now " ++ dir'
     return True
+cmd_cdup _ = cmd_cwd ".."
 cmd_pwd _ = do
     d <- lift pwd
     reply "257" $ "\"" ++ d ++ "\" is the current working directory."
@@ -135,8 +137,7 @@ runTransfer app = do
 
 cmd_list :: FTPBackend m => Command m
 cmd_list dir =
-    let dir' = if dir=="" then "." else dir
-    in  runTransfer $ \src snk -> list dir' $$ snk
+    runTransfer $ \src snk -> list dir $$ snk
 
 cmd_noop :: FTPBackend m => Command m
 cmd_noop _ = reply "200" "OK" >> return True
@@ -158,6 +159,9 @@ cmd_stor ""   = reply "501" "Filename required" >> return True
 cmd_stor name =
     runTransfer $ \src snk -> src $$ upload name
 
+cmd_syst :: FTPBackend m => Command m
+cmd_syst _ = reply "215" "UNIX Type: L8" >> return True
+
 commands :: FTPBackend m => [(ByteString, Command m)]
 commands =
     [("USER", cmd_user)
@@ -166,10 +170,10 @@ commands =
     --,(Command "HELP" (help,             help_help))
     ,("CWD",  login_required cmd_cwd)
     ,("PWD",  login_required cmd_pwd)
+    ,("CDUP", login_required cmd_cdup)
     ,("PASV", login_required cmd_pasv)
     ,("PORT", login_required cmd_port)
     ,("LIST", login_required cmd_list)
-    --,(Command "CDUP" (login_required cmd_cdup,  help_cdup))
     ,("TYPE", login_required cmd_type)
     --,("MKD",  login_required cmd_mkd)
     ,("NOOP", login_required cmd_noop)
@@ -182,7 +186,7 @@ commands =
     ,("RETR", login_required cmd_retr)
     ,("STOR", login_required cmd_stor)
     --,(Command "STAT" (login_required cmd_stat,  help_stat))
-    --,(Command "SYST" (login_required cmd_syst,  help_syst))
+    ,("SYST", login_required cmd_syst)
     --,(Command "NLST" (login_required cmd_nlst,  help_nlst))
     ]
 
