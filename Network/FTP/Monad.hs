@@ -13,7 +13,6 @@ import Control.Monad.Trans.Control
 import Control.Monad.Base
 
 import Network.Socket (Socket, SockAddr)
-import Network.Socket (SockAddr)
 
 data DataChannel = NoChannel
                  | PasvChannel Socket

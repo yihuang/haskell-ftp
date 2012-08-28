@@ -3,7 +3,6 @@
            , TypeFamilies
            , MultiParamTypeClasses
            , CPP
-           , ViewPatterns
            #-}
 module Network.FTP.Backend.FileSystem where
 

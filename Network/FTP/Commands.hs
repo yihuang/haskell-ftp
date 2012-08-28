@@ -212,12 +212,12 @@ cmd_stat _ = do
          ]
 
 cmd_mode, cmd_stru :: FTPBackend m => Command m
-cmd_mode m = do
+cmd_mode m =
     case m of
         "S" -> reply "200" "Mode is Stream."
         _   -> reply "504" $ "Mode \"" ++ m ++ "\" not supported."
 
-cmd_stru s = do
+cmd_stru s =
     case s of
         "F" -> reply "200" "Structure is File."
         _   -> reply "504" $ "Structure \"" ++ s ++ "\" not supported."
@@ -252,7 +252,7 @@ commands =
 
 commandLoop :: FTPBackend m => FTP m ()
 commandLoop = do
-    (cmd, arg) <- wait $ getCommand
+    (cmd, arg) <- wait getCommand
     lift (ftplog $ cmd++" "++arg)
     case lookup cmd commands of
         Just cmd' ->
