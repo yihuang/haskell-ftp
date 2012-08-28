@@ -50,5 +50,5 @@ library
   -- other-modules:       
   
   -- Other library packages from which modules are imported.
-  build-depends:       base ==4.5.*, system-filepath ==0.4.*, network ==2.3.*, ftphs ==1.0.*, conduit ==0.5.*, basic-prelude ==0.3.*, monad-control ==0.3.*, network-conduit ==0.5.*, bytestring ==0.9.*, mtl ==2.1.*, transformers ==0.3.*, transformers-base ==0.4.*, lifted-base ==0.1.*, unix ==2.5.*, process-conduit ==0.5.*
+  build-depends:       base ==4.5.*, system-filepath ==0.4.*, network ==2.3.*, ftphs ==1.0.*, conduit ==0.5.*, basic-prelude ==0.3.*, monad-control ==0.3.*, network-conduit ==0.5.*, bytestring ==0.9.*, mtl ==2.1.*, transformers ==0.3.*, transformers-base ==0.4.*, lifted-base ==0.1.*, unix ==2.5.*, process-conduit ==0.5.*, directory ==1.1.*
   
