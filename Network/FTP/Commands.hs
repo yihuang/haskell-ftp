@@ -261,4 +261,6 @@ commandLoop = do
               `Lifted.catch` \(ex::SomeException) ->
                                  do reply "502" (S.pack $ P.show ex)
                                     commandLoop
-        Nothing -> reply "502" $ "Unrecognized command " ++ cmd
+        Nothing -> do
+            reply "502" $ "Unrecognized command " ++ cmd
+            commandLoop
