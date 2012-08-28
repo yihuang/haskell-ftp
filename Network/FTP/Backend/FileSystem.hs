@@ -22,11 +22,12 @@ import Network.FTP.Backend
 
 data FilesystemState = FilesystemState
   { user :: Maybe (UserId FilesystemBackend)
+  , base :: ByteString
   , dir  :: ByteString
   }
 
-defaultFilesystemState :: FilesystemState
-defaultFilesystemState = FilesystemState Nothing ""
+defaultFilesystemState :: ByteString -> FilesystemState
+defaultFilesystemState base = FilesystemState Nothing base "/"
 
 newtype FilesystemBackend a = FilesystemBackend { unFilesystemBackend :: StateT FilesystemState (ResourceT IO) a }
     deriving ( Functor, Applicative, Monad, MonadIO
@@ -59,7 +60,9 @@ instance FTPBackend FilesystemBackend where
     cwd dir = FilesystemBackend (modify $ \st -> st{dir=dir})
     pwd     = FilesystemBackend (gets dir)
 
-    list    = C.sourceList ["list"]
+    list dir  = C.sourceList ["list"]
+    remove name = return ()
 
-    download = C.sourceFile . S.unpack
-    upload   = C.sinkFile . S.unpack
+    --download = C.sourceFile . S.unpack
+    download name = C.sourceList [name, "hello", "world"]
+    upload        = C.sinkFile . S.unpack

@@ -1,17 +1,20 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, FlexibleContexts #-}
 module Network.FTP.Commands where
 
-import qualified Prelude
+import qualified Prelude as P
 import BasicPrelude
-import Control.Exception (bracketOnError)
-import Control.Monad.Trans.State (gets)
+
+import Control.Monad.Trans.State (get, gets, put, modify)
+import qualified Control.Exception.Lifted as Lifted
+
 import Data.Maybe
 import qualified Data.ByteString.Char8 as S
-import qualified Network.Socket as NS
-import Network.BSD (getProtocolNumber)
+import Data.Conduit
+import Data.Conduit.Network
+
+import qualified Network.FTP.Socket as NS
 import Network.FTP.Monad
 import Network.FTP.Backend
-import Network.FTP.Client.Parser (toPortString)
 
 type Command m = ByteString -> FTP m Bool
 
@@ -43,33 +46,117 @@ cmd_user name = do
 cmd_cwd, cmd_pwd :: FTPBackend m => Command m
 cmd_cwd dir = do
     lift (cwd dir)
+    reply "250" $ "New directory now " ++ dir
     return True
 cmd_pwd _ = do
     d <- lift pwd
     reply "257" $ "\"" ++ d ++ "\" is the current working directory."
     return True
 
-startPasvServer :: NS.SockAddr -> IO NS.Socket
-startPasvServer (NS.SockAddrInet _ host) = do
-    proto <- getProtocolNumber "tcp"
-    bracketOnError
-      (NS.socket NS.AF_INET NS.Stream proto)
-      NS.sClose
-      (\sock -> do
-          NS.setSocketOption sock NS.ReuseAddr 0
-          NS.bindSocket sock (NS.SockAddrInet NS.aNY_PORT host)
-          NS.listen sock 1
-          return sock
-      )
-startPasvServer _ = fail "Require IPv4 sockets"
+cmd_type :: FTPBackend m => Command m
+cmd_type tp = do
+    let modType newtp = do
+            st <- FTP get
+            reply "200" $ S.pack $
+                "Type changed from " ++ P.show (ftpDataType st) ++
+                " to " ++ P.show newtp
+            FTP $ put st{ ftpDataType = newtp }
+    case tp of
+        "I"     ->  modType Binary
+        "L 8"   ->  modType Binary
+        "A"     ->  modType ASCII
+        "AN"    ->  modType ASCII
+        "AT"    ->  modType ASCII
+        _       ->  reply "504" $ "Type \"" ++ tp ++ "\" not supported."
+    return True
 
 cmd_pasv :: FTPBackend m => Command m
 cmd_pasv _ = do
     local <- FTP (gets ftpLocal)
-    sock <- liftIO $ startPasvServer local
-    portstr <- liftIO $ NS.getSocketName sock >>= toPortString
+    sock <- liftIO $ NS.startPasvServer local
+    FTP $ modify $ \st -> st { ftpChannel = PasvChannel sock }
+    portstr <- liftIO $ NS.getSocketName sock >>= NS.toPortString
     reply "227" $ S.pack $ "Entering passive mode (" ++ portstr ++ ")"
     return True
+
+cmd_port :: FTPBackend m => Command m
+cmd_port port = do
+    local <- FTP (gets ftpLocal)
+    addr <- liftIO $ NS.fromPortString (S.unpack port)
+    case validate local addr of
+        Right _  -> doit addr
+        Left err -> reply "501" err
+    return True
+  where
+    validate (NS.SockAddrInet _ h1) (NS.SockAddrInet _ h2) =
+                if h1==h2
+                   then Right ()
+                   else Left "Will only connect to same client as command channel."
+    validate (NS.SockAddrInet _ _) _ = Left "Require IPv4 in specified address"
+    validate _ _                     = Left "Require IPv4 on client"
+
+    doit addr = do
+        FTP $ modify $ \st -> st { ftpChannel = PortChannel addr }
+        reply "200" $ S.pack $ "OK, later I will connect to " ++ P.show addr
+
+runTransfer :: FTPBackend m => Application m -> FTP m Bool
+runTransfer app = do
+    reply "150" "I'm going to open the data channel now."
+    chan <- FTP (gets ftpChannel)
+    case chan of
+        NoChannel -> fail "Can't connect when no data channel exists"
+
+        PasvChannel sock ->
+            Lifted.finally
+              (do (csock, _) <- liftIO $ NS.accept sock
+                  lift $ Lifted.finally
+                           (app (sourceSocket csock) (sinkSocket csock))
+                           (liftIO (NS.sClose csock))
+              )
+              (do liftIO (NS.sClose sock)
+                  FTP $ modify $ \st -> st{ ftpChannel = NoChannel }
+              )
+
+        PortChannel addr ->
+            Lifted.finally
+              (do sock <- liftIO $ do
+                      proto <- NS.getProtocolNumber "tcp"
+                      sock <- NS.socket NS.AF_INET NS.Stream proto
+                      NS.connect sock addr
+                      return sock
+                  lift $ Lifted.finally
+                           (app (sourceSocket sock) (sinkSocket sock))
+                           (liftIO (NS.sClose sock))
+              )
+              (FTP $ modify $ \st -> st{ ftpChannel = NoChannel })
+
+    reply "226" "Closing data connection; transfer complete."
+    return True
+
+cmd_list :: FTPBackend m => Command m
+cmd_list dir =
+    let dir' = if dir=="" then "." else dir
+    in  runTransfer $ \src snk -> list dir' $$ snk
+
+cmd_noop :: FTPBackend m => Command m
+cmd_noop _ = reply "200" "OK" >> return True
+
+cmd_dele :: FTPBackend m => Command m
+cmd_dele "" = reply "501" "Filename required" >> return True
+cmd_dele name = do
+    lift (remove name)
+    reply "250" $ "File " ++ name ++ " deleted."
+    return True
+
+cmd_retr :: FTPBackend m => Command m
+cmd_retr "" = reply "501" "Filename required" >> return True
+cmd_retr name =
+    runTransfer $ \src snk -> download name $$ snk
+
+cmd_stor :: FTPBackend m => Command m
+cmd_stor ""   = reply "501" "Filename required" >> return True
+cmd_stor name =
+    runTransfer $ \src snk -> src $$ upload name
 
 commands :: FTPBackend m => [(ByteString, Command m)]
 commands =
@@ -80,20 +167,20 @@ commands =
     ,("CWD",  login_required cmd_cwd)
     ,("PWD",  login_required cmd_pwd)
     ,("PASV", login_required cmd_pasv)
-    --,("LIST", login_required cmd_list)
+    ,("PORT", login_required cmd_port)
+    ,("LIST", login_required cmd_list)
     --,(Command "CDUP" (login_required cmd_cdup,  help_cdup))
-    --,(Command "TYPE" (login_required cmd_type,  help_type))
-    --,(Command "NOOP" (login_required cmd_noop,  help_noop))
+    ,("TYPE", login_required cmd_type)
+    --,("MKD",  login_required cmd_mkd)
+    ,("NOOP", login_required cmd_noop)
     --,(Command "RNFR" (login_required cmd_rnfr,  help_rnfr))
     --,(Command "RNTO" (login_required cmd_rnto,  help_rnto))
-    --,(Command "DELE" (login_required cmd_dele,  help_dele))
+    ,("DELE", login_required cmd_dele)
     --,(Command "RMD"  (login_required cmd_rmd,   help_rmd))
-    --,(Command "MKD"  (login_required cmd_mkd,   help_mkd))
     --,(Command "MODE" (login_required cmd_mode,  help_mode))
     --,(Command "STRU" (login_required cmd_stru,  help_stru))
-    --,(Command "PORT" (login_required cmd_port,  help_port))
-    --,(Command "RETR" (login_required cmd_retr,  help_retr))
-    --,(Command "STOR" (login_required cmd_stor,  help_stor))
+    ,("RETR", login_required cmd_retr)
+    ,("STOR", login_required cmd_stor)
     --,(Command "STAT" (login_required cmd_stat,  help_stat))
     --,(Command "SYST" (login_required cmd_syst,  help_syst))
     --,(Command "NLST" (login_required cmd_nlst,  help_nlst))
@@ -102,6 +189,7 @@ commands =
 commandLoop :: FTPBackend m => FTP m ()
 commandLoop = do
     (cmd, arg) <- wait $ getCommand
+    lift (ftplog $ cmd++" "++arg)
     case lookup cmd commands of
         Just cmd' -> do
             continue <- cmd' arg

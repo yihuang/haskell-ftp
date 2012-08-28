@@ -1,4 +1,4 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving, OverloadedStrings #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving, OverloadedStrings, MultiParamTypeClasses, FlexibleContexts, TypeFamilies #-}
 module Network.FTP.Monad where
 
 import qualified Prelude as P
@@ -9,18 +9,26 @@ import Data.Conduit
 
 import Control.Monad.Trans
 import Control.Monad.Trans.State
+import Control.Monad.Trans.Control
+import Control.Monad.Base
 
+import Network.Socket (Socket, SockAddr)
 import Network.Socket (SockAddr)
 
-data Mode = Passive | Active
+data DataChannel = NoChannel
+                 | PasvChannel Socket
+                 | PortChannel SockAddr
+    deriving (Show)
+
 data DataType = ASCII | Binary
+    deriving (Show)
 
 data FTPState m = FTPState
   { ftpSource   :: ResumableSource m ByteString
   , ftpSink     :: Sink ByteString m ()
   , ftpRemote   :: SockAddr
   , ftpLocal    :: SockAddr
-  , ftpMode     :: Mode
+  , ftpChannel  :: DataChannel
   , ftpDataType :: DataType
   }
 
@@ -34,19 +42,30 @@ defaultFTPState src snk remote local =
              snk
              remote
              local
-             Passive
+             NoChannel
              ASCII
 
 newtype FTP m a = FTP { unFTP :: StateT (FTPState m) m a }
-    deriving (Functor, Monad, MonadIO)
+    deriving (Functor, Applicative, Monad, MonadIO)
 
 instance MonadTrans FTP where
     lift m = FTP (lift m)
 
+instance MonadBase IO m => MonadBase IO (FTP m) where
+    liftBase = FTP . liftBase
+
+instance MonadBaseControl IO m => MonadBaseControl IO (FTP m) where
+    newtype StM (FTP m) a = FTPStM { unFTPStM :: StM (StateT (FTPState m) m) a }
+    liftBaseWith f = FTP . liftBaseWith $ \runInBase -> f $ liftM FTPStM . runInBase . unFTP
+    restoreM = FTP . restoreM . unFTPStM
+
 runFTP :: FTPState m -> FTP m a -> m (a, FTPState m)
 runFTP s m = runStateT (unFTP m) s
 
-withClient :: Monad m => (ResumableSource m ByteString -> FTP m (ResumableSource m ByteString, a)) -> FTP m a
+withClient :: Monad m
+              => (ResumableSource m ByteString
+              -> FTP m (ResumableSource m ByteString, a))
+              -> FTP m a
 withClient f = do
     st <- FTP get
     (src, r) <- f (ftpSource st)
