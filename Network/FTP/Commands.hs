@@ -54,13 +54,13 @@ cmd_user name = do
 cmd_cwd, cmd_cdup, cmd_pwd :: FTPBackend m => Command m
 
 cmd_cwd dir = do
-    lift (cwd (decode dir))
-    dir' <- lift pwd
+    cwd (decode dir)
+    dir' <- pwd
     reply "250" $ "New directory now " ++ encode dir'
 
 cmd_cdup _ = cmd_cwd ".."
 cmd_pwd _ = do
-    d <- lift pwd
+    d <- pwd
     reply "257" $ "\"" ++ encode d ++ "\" is the current working directory."
 
 cmd_type :: FTPBackend m => Command m
@@ -153,18 +153,20 @@ cmd_noop _ = reply "200" "OK"
 cmd_dele :: FTPBackend m => Command m
 cmd_dele "" = reply "501" "Filename required"
 cmd_dele name = do
-    lift (dele (decode name))
+    ftpAbsolute (decode name) >>= lift . dele
     reply "250" $ "File " ++ name ++ " deleted."
 
 cmd_retr :: FTPBackend m => Command m
 cmd_retr "" = reply "501" "Filename required"
-cmd_retr name =
-    runTransfer $ \_ snk -> download (decode name) $$ snk
+cmd_retr name = do
+    name' <- ftpAbsolute (decode name)
+    runTransfer $ \_ snk -> download name' $$ snk
 
 cmd_stor :: FTPBackend m => Command m
 cmd_stor ""   = reply "501" "Filename required"
-cmd_stor name =
-    runTransfer $ \src _ -> src $$ upload (decode name)
+cmd_stor name = do
+    name' <- ftpAbsolute (decode name)
+    runTransfer $ \src _ -> src $$ upload name'
 
 cmd_syst :: FTPBackend m => Command m
 cmd_syst _ = reply "215" "UNIX Type: L8"
@@ -172,8 +174,9 @@ cmd_syst _ = reply "215" "UNIX Type: L8"
 cmd_mkd :: FTPBackend m => Command m
 cmd_mkd ""  = reply "501" "Directory name required"
 cmd_mkd dir = do
-    path <- lift (mkd (decode dir))
-    reply "257" $ "\"" ++ encode path ++ "\" created."
+    dir' <- ftpAbsolute (decode dir)
+    lift $ mkd dir'
+    reply "257" $ "\"" ++ encode dir' ++ "\" created."
 
 cmd_rnfr, cmd_rnto :: FTPBackend m => Command m
 cmd_rnfr ""   = reply "501" "Filename required"
@@ -189,13 +192,15 @@ cmd_rnto name = do
             reply "503" "RNFR required before RNTO"
         Just fromname -> do
             FTP $ modify $ \st -> st { ftpRename = Nothing }
-            lift (rename fromname (decode name))
+            fname <- ftpAbsolute fromname
+            tname <- ftpAbsolute (decode name)
+            lift (rename fname tname)
             reply "250" $ "File "++encode fromname++" renamed to "++name
 
 cmd_rmd :: FTPBackend m => Command m
 cmd_rmd ""   = reply "501" "Filename required"
 cmd_rmd dir = do
-    lift (rmd (decode dir))
+    ftpAbsolute (decode dir) >>= lift . rmd
     reply "250" $ "Directory " ++ dir ++ " removed."
 
 cmd_stat :: FTPBackend m => Command m

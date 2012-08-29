@@ -3,6 +3,7 @@ module Network.FTP.Monad where
 
 import qualified Prelude as P
 import BasicPrelude
+import Filesystem.Path.CurrentOS (parent)
 
 import qualified Data.ByteString.Char8 as S
 import Data.Conduit
@@ -30,6 +31,7 @@ data FTPState m = FTPState
   , ftpChannel  :: DataChannel                  -- ^ ftp data channel
   , ftpDataType :: DataType                     -- ^ ftp data type
   , ftpRename   :: Maybe FilePath               -- ^ store from name during renaming.
+  , ftpDir      :: FilePath                     -- ^ the ftp virtual directory.
   }
 
 defaultFTPState :: ResumableSource m ByteString
@@ -45,6 +47,7 @@ defaultFTPState src snk remote local =
              NoChannel
              ASCII
              Nothing
+             "/"
 
 {-|
  - FTP is a monad transformer that only handles only ftp protocol, and leaves authentication and filesystem details to underlying monad.
@@ -131,3 +134,24 @@ reply code msg =
     build c []     = [c, "  "]
     build c [s]    = [c, " ", s]
     build c (s:ss) = [c, "-", s] ++ build c ss
+
+{-|
+ - Change working directory
+ -}
+cwd :: Monad m => FilePath -> FTP m ()
+cwd ".." = FTP (modify $ \st -> st{ftpDir = parent (ftpDir st)})
+cwd d    = FTP (modify $ \st -> st{ftpDir = ftpDir st </> d})
+
+{-|
+ - Print working directory
+ -}
+pwd :: Monad m => FTP m FilePath
+pwd = FTP (gets ftpDir)
+
+{-|
+ - Make absolute path.
+ -}
+ftpAbsolute :: Monad m => FilePath -> FTP m FilePath
+ftpAbsolute path = do
+    dir <- FTP (gets ftpDir)
+    return (dir </> path)

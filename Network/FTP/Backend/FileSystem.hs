@@ -34,11 +34,10 @@ import Network.FTP.Backend
 data FSState = FSState
   { user :: Maybe (UserId FSBackend)
   , base :: FilePath
-  , dir  :: FilePath
   }
 
 defaultFSState :: FilePath -> FSState
-defaultFSState base = FSState Nothing base "/"
+defaultFSState base = FSState Nothing base
 
 newtype FSBackend a = FSBackend { unFSBackend :: StateT FSState (ResourceT IO) a }
     deriving ( Functor, Applicative, Monad, MonadIO
@@ -72,8 +71,7 @@ dropHeadingPathSeparator = decode . drop' . encode
 makeAbsolute :: FilePath -> FSBackend FilePath
 makeAbsolute path = do
     b <- FSBackend (gets base)
-    d <- FSBackend (gets dir)
-    return $ b </> dropHeadingPathSeparator (d </> path)
+    return $ b </> dropHeadingPathSeparator path
 
 instance FTPBackend FSBackend where
     type UserId FSBackend = ByteString
@@ -87,10 +85,6 @@ instance FTPBackend FSBackend where
 
     authenticated = FSBackend (gets user)
 
-    cwd ".." = FSBackend (modify $ \st -> st{dir = parent (dir st)})
-    cwd d    = FSBackend (modify $ \st -> st{dir = dir st </> d})
-    pwd      = FSBackend (gets dir)
-
     list dir = do
         dir' <- lift (makeAbsolute dir)
         C.sourceCmd $ "ls -l " ++ encodeString dir'
@@ -100,10 +94,8 @@ instance FTPBackend FSBackend where
         paths <- liftIO $ getDirectoryContents (encodeString dir')
         C.sourceList $ map (S.pack . (++"\n")) paths
 
-    mkd dir = do
-        dir' <- makeAbsolute dir
-        liftIO $ createDirectory (encodeString dir')
-        return dir'
+    mkd dir =
+        makeAbsolute dir >>= liftIO . createDirectory . encodeString
 
     dele name =
         makeAbsolute name >>= liftIO . removeFile . encodeString
