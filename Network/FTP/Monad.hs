@@ -14,6 +14,7 @@ import Control.Monad.Trans (MonadTrans(..))
 import Control.Monad.Trans.Control (MonadBaseControl(..))
 
 import Network.Socket (Socket, SockAddr)
+import Network.FTP.Backend (UserId)
 
 data DataChannel = NoChannel
                  | PasvChannel Socket
@@ -32,6 +33,7 @@ data FTPState m = FTPState
   , ftpDataType :: DataType                     -- ^ ftp data type
   , ftpRename   :: Maybe FilePath               -- ^ store from name during renaming.
   , ftpDir      :: FilePath                     -- ^ the ftp virtual directory.
+  , ftpUser     :: Maybe (UserId m)             -- ^ current authenticated user.
   }
 
 defaultFTPState :: ResumableSource m ByteString
@@ -48,6 +50,7 @@ defaultFTPState src snk remote local =
              ASCII
              Nothing
              "/"
+             Nothing
 
 {-|
  - FTP is a monad transformer that only handles only ftp protocol, and leaves authentication and filesystem details to underlying monad.

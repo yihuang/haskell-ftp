@@ -25,7 +25,6 @@ class ( Functor m
     authenticate  :: ByteString
                   -> ByteString
                   -> m (Maybe (UserId m))             -- ^ login.
-    authenticated :: m (Maybe (UserId m))             -- ^ checked current login status.
 
     list          :: FilePath -> Source m ByteString  -- ^ list directory content.
     nlst          :: FilePath -> Source m ByteString  -- ^ list names inside directory.

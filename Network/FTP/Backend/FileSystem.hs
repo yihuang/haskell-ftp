@@ -78,12 +78,10 @@ instance FTPBackend FSBackend where
 
     ftplog = liftIO . S.putStrLn
 
-    authenticate user pass = do
-        when (user==pass) $
-             FSBackend (modify $ \st -> st{user=Just user})
-        authenticated
-
-    authenticated = FSBackend (gets user)
+    authenticate user pass =
+        if (user==pass)
+          then return (Just user)
+          else return Nothing
 
     list dir = do
         dir' <- lift (makeAbsolute dir)

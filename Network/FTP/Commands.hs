@@ -34,22 +34,24 @@ instance Exception ApplicationQuit
  -}
 login_required :: FTPBackend m => Command m -> Command m
 login_required cmd arg = do
-    b <- isJust <$> lift authenticated
+    b <- isJust <$> FTP (gets ftpUser)
     if b
       then cmd arg
       else reply "530" "Command not possible in non-authenticated state."
 
 cmd_user :: FTPBackend m => Command m
 cmd_user name = do
-    b <- isJust <$> lift authenticated
+    b <- isJust <$> FTP (gets ftpUser)
     if b
       then reply "530" "Command not possible in authenticated state."
       else do
         reply "331" "User name accepted; send password."
         pass <- wait (expect "PASS")
-        b' <- lift (isJust <$> authenticate name pass)
-        if b' then reply "230" "login successful."
-              else reply "530" "incorrect password."
+        muser <- lift (authenticate name pass)
+        FTP $ modify $ \st -> st { ftpUser = muser }
+        if isJust muser
+           then reply "230" "login successful."
+           else reply "530" "incorrect password."
 
 cmd_cwd, cmd_cdup, cmd_pwd :: FTPBackend m => Command m
 
@@ -206,7 +208,6 @@ cmd_rmd dir = do
 cmd_stat :: FTPBackend m => Command m
 cmd_stat _ = do
     st <- FTP get
-    auth <- lift authenticated
     reply "211" $ S.pack $ P.unlines
          [" *** Sever statistics and information"
          ," *** Please type HELP for more details"
@@ -215,7 +216,7 @@ cmd_stat _ = do
          ,"Connected From      : ", P.show (ftpRemote st)
          ,"Connected To        : ", P.show (ftpLocal st)
          ,"Data Transfer Type  : ", P.show (ftpDataType st)
-         ,"Auth Status         : ", P.show auth
+         ,"Auth Status         : ", P.show (ftpUser st)
          ,"End of status."
          ]
 
