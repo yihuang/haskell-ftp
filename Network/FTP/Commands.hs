@@ -112,6 +112,7 @@ runTransfer :: FTPBackend m => Application m -> FTP m ()
 runTransfer app = do
     reply "150" "I'm going to open the data channel now."
     chan <- FTP (gets ftpChannel)
+    FTP $ modify $ \st -> st{ ftpChannel = NoChannel }
     case chan of
         NoChannel -> fail "Can't connect when no data channel exists"
 
@@ -122,22 +123,17 @@ runTransfer app = do
                            (app (sourceSocket csock) (sinkSocket csock))
                            (liftIO (NS.sClose csock))
               )
-              (do liftIO (NS.sClose sock)
-                  FTP $ modify $ \st -> st{ ftpChannel = NoChannel }
-              )
+              (liftIO (NS.sClose sock))
 
-        PortChannel addr ->
-            Lifted.finally
-              (do sock <- liftIO $ do
-                      proto <- NS.getProtocolNumber "tcp"
-                      sock <- NS.socket NS.AF_INET NS.Stream proto
-                      NS.connect sock addr
-                      return sock
-                  lift $ Lifted.finally
-                           (app (sourceSocket sock) (sinkSocket sock))
-                           (liftIO (NS.sClose sock))
-              )
-              (FTP $ modify $ \st -> st{ ftpChannel = NoChannel })
+        PortChannel addr -> do
+            sock <- liftIO $ do
+                proto <- NS.getProtocolNumber "tcp"
+                sock <- NS.socket NS.AF_INET NS.Stream proto
+                NS.connect sock addr
+                return sock
+            lift $ Lifted.finally
+                     (app (sourceSocket sock) (sinkSocket sock))
+                     (liftIO (NS.sClose sock))
 
     reply "226" "Closing data connection; transfer complete."
 
@@ -266,12 +262,14 @@ commandLoop = do
     (cmd, arg) <- wait getCommand
     lift (ftplog $ cmd++" "++arg)
     case lookup cmd commands of
-        Just cmd' ->
-            cmd' arg
-              `Lifted.catch` \(_::ApplicationQuit) -> return ()
-              `Lifted.catch` \(ex::SomeException) ->
-                                 do reply "502" (S.pack $ P.show ex)
-                                    commandLoop
+        Just cmd' -> do
+            continue <- (cmd' arg >> return True)
+                           `Lifted.catch` (\(_::ApplicationQuit) -> return False)
+                           `Lifted.catch` (\(ex::SomeException) -> do
+                                               reply "502" (S.pack $ P.show ex)
+                                               return True
+                                          )
+            when continue commandLoop
         Nothing -> do
             reply "502" $ "Unrecognized command " ++ cmd
             commandLoop
