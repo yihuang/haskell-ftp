@@ -6,6 +6,7 @@ import BasicPrelude
 import Filesystem.Path.CurrentOS (parent)
 
 import qualified Data.ByteString.Char8 as S
+import qualified Data.CaseInsensitive as CI
 import Data.Conduit
 
 import Control.Monad.Trans.State (StateT, runStateT, get, gets, modify)
@@ -100,19 +101,19 @@ headOrFail = await >>= maybe (fail "connection closed") return
 {-|
  - Parse a request command.
  -}
-getCommand :: Monad m => GSink ByteString m (ByteString, ByteString)
+getCommand :: Monad m => GSink ByteString m (CI.CI ByteString, ByteString)
 getCommand = do
     s' <- headOrFail
     let (cmd', arg) = S.span (\c -> c/=' ' && c/='\r') s'
         arg' = if S.length arg < 2
                  then S.empty
                  else S.tail (S.init arg) -- strip heading ' ' and trailing '\r'
-    return (cmd', arg')
+    return (CI.mk cmd', arg')
 
 {-|
  - Parse a command, if it's not the expected one, then fail.
  -}
-expect :: (Monad m) => ByteString -> GSink ByteString m ByteString
+expect :: (Monad m) => CI.CI ByteString -> GSink ByteString m ByteString
 expect s = do
     (cmd, arg) <- getCommand
     if s==cmd

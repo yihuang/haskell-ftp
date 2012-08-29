@@ -13,6 +13,7 @@ import Control.Exception (throw)
 import qualified Control.Exception.Lifted as Lifted
 
 import qualified Data.ByteString.Char8 as S
+import qualified Data.CaseInsensitive as CI
 import Data.Typeable (Typeable)
 import Data.Maybe (isJust)
 import Data.Conduit ( ($$) )
@@ -229,7 +230,7 @@ cmd_stru s =
         "F" -> reply "200" "Structure is File."
         _   -> reply "504" $ "Structure \"" ++ s ++ "\" not supported."
 
-commands :: FTPBackend m => [(ByteString, Command m)]
+commands :: FTPBackend m => [(CI.CI ByteString, Command m)]
 commands =
     [("USER", cmd_user)
     ,("PASS", const $ reply "530" "Out of sequence PASS command")
@@ -260,7 +261,7 @@ commands =
 commandLoop :: FTPBackend m => FTP m ()
 commandLoop = do
     (cmd, arg) <- wait getCommand
-    lift (ftplog $ cmd++" "++arg)
+    lift (ftplog $ CI.original cmd++" "++arg)
     case lookup cmd commands of
         Just cmd' -> do
             continue <- (cmd' arg >> return True)
@@ -271,5 +272,5 @@ commandLoop = do
                                           )
             when continue commandLoop
         Nothing -> do
-            reply "502" $ "Unrecognized command " ++ cmd
+            reply "502" $ "Unrecognized command " ++ CI.original cmd
             commandLoop
