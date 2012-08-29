@@ -142,12 +142,14 @@ runTransfer app = do
     reply "226" "Closing data connection; transfer complete."
 
 cmd_list :: FTPBackend m => Command m
-cmd_list dir =
-    runTransfer $ \_ snk -> list (decode dir) $$ snk
+cmd_list dir = do
+    dir' <- ftpAbsolute (decode dir)
+    runTransfer $ \_ snk -> list dir' $$ snk
 
 cmd_nlst :: FTPBackend m => Command m
-cmd_nlst dir =
-    runTransfer $ \_ snk -> nlst (decode dir) $$ snk
+cmd_nlst dir = do
+    dir' <- ftpAbsolute (decode dir)
+    runTransfer $ \_ snk -> nlst dir' $$ snk
 
 cmd_noop :: FTPBackend m => Command m
 cmd_noop _ = reply "200" "OK"
