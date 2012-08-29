@@ -6,6 +6,9 @@ module Network.FTP.Server
   , module Data.Conduit.Network
   ) where
 
+{-| Run ftp server to backend monad.
+ -}
+
 import qualified Prelude as P
 import BasicPrelude
 
@@ -22,7 +25,7 @@ import Network.FTP.Monad
 import Network.FTP.Backend (FTPBackend)
 import Network.FTP.Commands (commandLoop)
 
-{- main ftp server application
+{-| Main ftp server application, should be runned by `runTCPServer`.
  -}
 ftpServer :: FTPBackend m => NS.SockAddr -> NS.SockAddr -> Application m
 ftpServer remote local src snk = do
@@ -32,7 +35,7 @@ ftpServer remote local src snk = do
         commandLoop
     return ()
 
-{- modified version of the one in network-conduit, pass remote and local addresses to application.
+{-| Modified version of the `runTCPServer` in network-conduit, add remote and local address arguments to application.
  -}
 runTCPServer :: (MonadIO m, MonadBaseControl IO m) => ServerSettings -> (NS.SockAddr -> NS.SockAddr -> Application m) -> m ()
 runTCPServer (ServerSettings port host) app = control $ \run -> bracket

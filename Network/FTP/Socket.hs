@@ -6,6 +6,10 @@ module Network.FTP.Socket
   , module Network.BSD
   ) where
 
+{-|
+ - Network Utils.
+ -}
+
 import Control.Exception (bracketOnError)
 import Network.Socket
 import Network.BSD (getProtocolNumber)
@@ -24,4 +28,3 @@ startPasvServer (SockAddrInet _ host) = do
           return sock
       )
 startPasvServer _ = fail "Require IPv4 sockets"
-

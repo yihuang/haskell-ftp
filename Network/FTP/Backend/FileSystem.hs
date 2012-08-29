@@ -6,6 +6,10 @@
            #-}
 module Network.FTP.Backend.FileSystem where
 
+{-|
+ - Simple file system backend.
+ -}
+
 import qualified Prelude
 import BasicPrelude
 import qualified System.Posix.Directory as Dir
@@ -65,10 +69,6 @@ dropHeadingPathSeparator = decode . drop' . encode
 #endif
             _               -> s
 
-currentDirectory :: FSBackend FilePath
-currentDirectory =
-    FSBackend (gets dir)
-
 makeAbsolute :: FilePath -> FSBackend FilePath
 makeAbsolute path = do
     b <- FSBackend (gets base)
@@ -78,19 +78,18 @@ makeAbsolute path = do
 instance FTPBackend FSBackend where
     type UserId FSBackend = ByteString
 
-    ftplog  = liftIO . S.putStrLn
+    ftplog = liftIO . S.putStrLn
 
     authenticate user pass = do
         when (user==pass) $
              FSBackend (modify $ \st -> st{user=Just user})
         authenticated
 
-    authenticated   = FSBackend (gets user)
+    authenticated = FSBackend (gets user)
 
     cwd ".." = FSBackend (modify $ \st -> st{dir = parent (dir st)})
     cwd d    = FSBackend (modify $ \st -> st{dir = dir st </> d})
-
-    pwd   = currentDirectory
+    pwd      = FSBackend (gets dir)
 
     list dir = do
         dir' <- lift (makeAbsolute dir)

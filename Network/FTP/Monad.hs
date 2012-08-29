@@ -7,10 +7,10 @@ import BasicPrelude
 import qualified Data.ByteString.Char8 as S
 import Data.Conduit
 
-import Control.Monad.Trans
-import Control.Monad.Trans.State
-import Control.Monad.Trans.Control
-import Control.Monad.Base
+import Control.Monad.Trans.State (StateT, runStateT, get, gets, modify)
+import Control.Monad.Base (MonadBase(..))
+import Control.Monad.Trans (MonadTrans(..))
+import Control.Monad.Trans.Control (MonadBaseControl(..))
 
 import Network.Socket (Socket, SockAddr)
 
@@ -23,13 +23,13 @@ data DataType = ASCII | Binary
     deriving (Show)
 
 data FTPState m = FTPState
-  { ftpSource   :: ResumableSource m ByteString
-  , ftpSink     :: Sink ByteString m ()
-  , ftpRemote   :: SockAddr
-  , ftpLocal    :: SockAddr
-  , ftpChannel  :: DataChannel
-  , ftpDataType :: DataType
-  , ftpRename   :: Maybe FilePath
+  { ftpSource   :: ResumableSource m ByteString -- ^ source for reading request
+  , ftpSink     :: Sink ByteString m ()         -- ^ sink for sending respose
+  , ftpRemote   :: SockAddr                     -- ^ client address
+  , ftpLocal    :: SockAddr                     -- ^ local address
+  , ftpChannel  :: DataChannel                  -- ^ ftp data channel
+  , ftpDataType :: DataType                     -- ^ ftp data type
+  , ftpRename   :: Maybe FilePath               -- ^ store from name during renaming.
   }
 
 defaultFTPState :: ResumableSource m ByteString
@@ -46,6 +46,9 @@ defaultFTPState src snk remote local =
              ASCII
              Nothing
 
+{-|
+ - FTP is a monad transformer that only handles only ftp protocol, and leaves authentication and filesystem details to underlying monad.
+ -}
 newtype FTP m a = FTP { unFTP :: StateT (FTPState m) m a }
     deriving (Functor, Applicative, Monad, MonadIO)
 
@@ -63,22 +66,34 @@ instance MonadBaseControl IO m => MonadBaseControl IO (FTP m) where
 runFTP :: FTPState m -> FTP m a -> m (a, FTPState m)
 runFTP s m = runStateT (unFTP m) s
 
-withClient :: Monad m
-              => (ResumableSource m ByteString
-              -> FTP m (ResumableSource m ByteString, a))
+{-|
+ - Consume request source, store the modified ResumableSource into state monad.
+ -}
+consumeSource :: Monad m
+              => (ResumableSource m ByteString -> FTP m (ResumableSource m ByteString, a))
               -> FTP m a
-withClient f = do
-    st <- FTP get
-    (src, r) <- f (ftpSource st)
-    FTP $ put st{ ftpSource = src }
+consumeSource f = do
+    src <- FTP (gets ftpSource)
+    (src', r) <- f src
+    FTP $ modify $ \st -> st{ ftpSource = src' }
     return r
 
+{-|
+ - Run a `Sink` to parse request.
+ - e.g. `wait getCommand :: FTP m (ByteString, ByteString)`
+ -}
 wait :: Monad m => Sink ByteString m b -> FTP m b
-wait snk = withClient $ \src -> lift (src $$++ snk)
+wait snk = consumeSource $ \src -> lift (src $$++ snk)
 
+{-|
+ - Get a line, fail when connection closed. The stream is assumed to be individual lines produced by upstream conduit.
+ -}
 headOrFail :: Monad m => GSink a m a
 headOrFail = await >>= maybe (fail "connection closed") return
 
+{-|
+ - Parse a request command.
+ -}
 getCommand :: Monad m => GSink ByteString m (ByteString, ByteString)
 getCommand = do
     s' <- headOrFail
@@ -88,18 +103,27 @@ getCommand = do
                  else S.tail (S.init arg) -- strip heading ' ' and trailing '\r'
     return (cmd', arg')
 
+{-|
+ - Parse a command, if it's not the expected one, then fail.
+ -}
 expect :: (Monad m) => ByteString -> GSink ByteString m ByteString
 expect s = do
-    (cmd, arg)  <- getCommand
+    (cmd, arg) <- getCommand
     if s==cmd
       then return arg
       else fail $ concat ["expect ", P.show s, " but got ", P.show cmd, " ."]
 
+{-|
+ - Send raw message to client
+ -}
 send :: Monad m => ByteString -> FTP m ()
 send s = do
     snk <- FTP $ gets ftpSink
     lift (yield s $$ snk)
 
+{-|
+ - Send reply code and message to client, support multiline message.
+ -}
 reply :: Monad m => ByteString -> ByteString -> FTP m ()
 reply code msg =
     send . S.concat $ build code (S.lines msg) ++ ["\r\n"]

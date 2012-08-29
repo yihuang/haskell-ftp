@@ -1,23 +1,26 @@
 {-# LANGUAGE OverloadedStrings, FlexibleContexts, DeriveDataTypeable, ScopedTypeVariables #-}
 module Network.FTP.Commands where
 
+{-| Implement all ftp commands in FTP Monad.
+ -}
+
 import qualified Prelude as P
 import BasicPrelude
-import Filesystem.Path.CurrentOS
+import Filesystem.Path.CurrentOS (encode, decode)
 
 import Control.Monad.Trans.State (get, gets, put, modify)
 import Control.Exception (throw)
 import qualified Control.Exception.Lifted as Lifted
 
-import Data.Typeable (Typeable)
-import Data.Maybe
 import qualified Data.ByteString.Char8 as S
-import Data.Conduit
-import Data.Conduit.Network
+import Data.Typeable (Typeable)
+import Data.Maybe (isJust)
+import Data.Conduit ( ($$) )
+import Data.Conduit.Network (Application, sinkSocket, sourceSocket)
 
-import qualified Network.FTP.Socket as NS
 import Network.FTP.Monad
-import Network.FTP.Backend
+import qualified Network.FTP.Socket as NS
+import Network.FTP.Backend (FTPBackend(..))
 
 type Command m = ByteString -> FTP m ()
 
@@ -46,7 +49,7 @@ cmd_user name = do
         pass <- wait (expect "PASS")
         b' <- lift (isJust <$> authenticate name pass)
         if b' then reply "230" "login successful."
-             else reply "530" "incorrect password."
+              else reply "530" "incorrect password."
 
 cmd_cwd, cmd_cdup, cmd_pwd :: FTPBackend m => Command m
 
