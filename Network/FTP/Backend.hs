@@ -1,5 +1,7 @@
 {-# LANGUAGE TypeFamilies, FlexibleContexts #-}
-module Network.FTP.Backend where
+module Network.FTP.Backend
+  ( FTPBackend(..)
+  ) where
 
 {-|
  - Interface for backend.

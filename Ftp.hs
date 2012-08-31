@@ -7,5 +7,5 @@ main :: IO ()
 main = do
     [d] <- getArgs
     let serverConf = ServerSettings 8000 HostAny
-    runFSBackend (defaultFSState (decodeString d)) $
+    runFSBackend (FSConf (decodeString d)) $
         runTCPServer serverConf ftpServer
