@@ -11,7 +11,7 @@ import Data.Conduit
 
 import Control.Monad.Trans.State (StateT, runStateT, get, gets, modify)
 import Control.Monad.Base (MonadBase(..))
-import Control.Monad.Trans (MonadTrans(..))
+import Control.Monad.Trans.Class (MonadTrans(..))
 import Control.Monad.Trans.Control (MonadBaseControl(..))
 
 import Network.Socket (Socket, SockAddr)

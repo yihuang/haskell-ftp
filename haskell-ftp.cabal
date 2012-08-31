@@ -49,6 +49,7 @@ library
                      , Network.FTP.Commands
                      , Network.FTP.Socket
                      , Network.FTP.Backend
+                     , Network.FTP.Backend.Utils
                      , Network.FTP.Backend.FileSystem
   
   -- Modules included in this library but not exported.
@@ -61,7 +62,6 @@ library
                      , monad-control ==0.3.*
                      , transformers >=0.3
                      , transformers-base >=0.4
-                     , mtl >=2.1
                      , case-insensitive >=0.3
                      , bytestring >=0.9
                      , unix ==2.5.*
