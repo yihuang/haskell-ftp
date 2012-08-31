@@ -30,6 +30,7 @@ import qualified Data.Conduit.Binary as C
 import qualified Data.Conduit.Process as C
 
 import Network.FTP.Backend (FTPBackend(..))
+import Network.FTP.Backend.Utils (dropHeadingPathSeparator)
 
 data FSConf = FSConf
   { fsBase :: FilePath
@@ -50,19 +51,6 @@ instance MonadBaseControl IO FSBackend where
 
 runFSBackend :: FSConf -> FSBackend a -> IO a
 runFSBackend st m = runResourceT $ runReaderT (unFSBackend m) st
-
-dropHeadingPathSeparator :: FilePath -> FilePath
-dropHeadingPathSeparator = decode . drop' . encode
-  where
-    drop' :: ByteString -> ByteString
-    drop' s =
-        case S.uncons s of
-#ifdef mingw32_HOST_OS
-            Just ('\\', s') -> s'
-#else
-            Just ('/',  s') -> s'
-#endif
-            _               -> s
 
 makeAbsolute :: FilePath -> FSBackend FilePath
 makeAbsolute path = do
