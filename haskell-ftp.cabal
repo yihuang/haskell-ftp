@@ -44,11 +44,30 @@ cabal-version:       >=1.8
 
 library
   -- Modules exported by the library.
-  exposed-modules:     Network.FTP.Backend, Network.FTP.Server, Network.FTP.Socket, Network.FTP.Monad, Network.FTP.Commands, Network.FTP.Backend.FileSystem
+  exposed-modules:     Network.FTP.Server
+                     , Network.FTP.Monad
+                     , Network.FTP.Commands
+                     , Network.FTP.Socket
+                     , Network.FTP.Backend
+                     , Network.FTP.Backend.FileSystem
   
   -- Modules included in this library but not exported.
   -- other-modules:       
   
   -- Other library packages from which modules are imported.
-  build-depends:       base ==4.5.*, system-filepath ==0.4.*, network ==2.3.*, ftphs ==1.0.*, conduit ==0.5.*, basic-prelude ==0.3.*, monad-control ==0.3.*, network-conduit ==0.5.*, bytestring ==0.9.*, mtl ==2.1.*, transformers ==0.3.*, transformers-base ==0.4.*, lifted-base ==0.1.*, unix ==2.5.*, process-conduit ==0.5.*, directory ==1.1.*, case-insensitive ==0.4.*
-  
+  build-depends:       base ==4.*
+                     , basic-prelude ==0.3.*
+                     , lifted-base ==0.1.*
+                     , monad-control ==0.3.*
+                     , transformers >=0.3
+                     , transformers-base >=0.4
+                     , mtl >=2.1
+                     , case-insensitive >=0.3
+                     , bytestring >=0.9
+                     , unix ==2.5.*
+                     , directory ==1.1.*
+                     , system-filepath ==0.4.*
+                     , network ==2.3.*
+                     , conduit ==0.5.*
+                     , network-conduit ==0.5.*
+                     , process-conduit ==0.5.*
