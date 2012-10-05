@@ -9,7 +9,7 @@ import qualified Data.ByteString.Char8 as S
 import qualified Data.CaseInsensitive as CI
 import Data.Conduit
 
-import Control.Monad.Trans.State (StateT, runStateT, get, gets, modify)
+import Control.Monad.Trans.State (StateT, runStateT, gets, modify)
 import Control.Monad.Base (MonadBase(..))
 import Control.Monad.Trans.Class (MonadTrans(..))
 import Control.Monad.Trans.Control (MonadBaseControl(..))

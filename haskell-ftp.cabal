@@ -43,6 +43,7 @@ cabal-version:       >=1.8
 
 
 library
+  ghc-options:       -Wall -O2
   -- Modules exported by the library.
   exposed-modules:     Network.FTP.Server
                      , Network.FTP.Monad

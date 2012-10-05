@@ -40,10 +40,10 @@ Example:
 -}
 toPortString :: SockAddr -> IO String
 toPortString (SockAddrInet port hostaddr) =
-    let wport = (fromIntegral (port))::Word16
+    let wport = fromIntegral port::Word16
         in do
            hn <- inet_ntoa hostaddr
-           return ((replace '.' ',' hn) ++ "," ++ 
+           return (replace '.' ',' hn ++ "," ++ 
                    (intercalate "," . map show . getBytes $ wport))
 toPortString _ = 
     error "toPortString only works on AF_INET addresses"
@@ -97,16 +97,14 @@ Results are undefined if any components of the input list are > 0xff!
 -}
 
 fromBytes :: (Bits a) => [a] -> a
-fromBytes input =
-    let dofb accum [] = accum
-        dofb accum (x:xs) = dofb ((shiftL accum 8) .|. x) xs
-        in
-        dofb 0 input
+fromBytes =
+    foldl (\accum x -> shiftL accum 8 .|. x) 0
 
+-- | split a list by sperator
 split :: Eq a => a -> [a] -> [[a]]
 split _ [] = []
-split x xs = fst : split x rest'
-  where (fst, rest) = break (==x) xs
+split sep xs = s : split sep rest'
+  where (s, rest) = break (==sep) xs
         rest' = case rest of
-                  (x:xs) -> xs
+                  (_:r) -> r
                   _      -> []
