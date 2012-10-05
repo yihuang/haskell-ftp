@@ -73,3 +73,24 @@ library
                      , conduit ==0.5.*
                      , network-conduit ==0.5.*
                      , process-conduit ==0.5.*
+
+executable simple-ftp-server
+  ghc-options:       -Wall -O2
+  main-is:           Ftp.hs
+  build-depends:       base ==4.*
+                     , basic-prelude ==0.3.*
+                     , lifted-base ==0.1.*
+                     , monad-control ==0.3.*
+                     , transformers >=0.3
+                     , transformers-base >=0.4
+                     , case-insensitive >=0.3
+                     , text >= 0.11
+                     , bytestring >=0.9
+                     , unix ==2.5.*
+                     , directory ==1.1.*
+                     , system-filepath ==0.4.*
+                     , network ==2.3.*
+                     , conduit ==0.5.*
+                     , network-conduit ==0.5.*
+                     , process-conduit ==0.5.*
+
