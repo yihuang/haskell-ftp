@@ -49,8 +49,8 @@ library
                      , Network.FTP.Monad
                      , Network.FTP.Commands
                      , Network.FTP.Socket
+                     , Network.FTP.Utils
                      , Network.FTP.Backend
-                     , Network.FTP.Backend.Utils
                      , Network.FTP.Backend.FileSystem
   
   -- Modules included in this library but not exported.
