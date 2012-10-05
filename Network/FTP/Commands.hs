@@ -6,7 +6,7 @@ module Network.FTP.Commands where
 
 import qualified Prelude as P
 import BasicPrelude
-import Filesystem.Path.CurrentOS (encode, decode)
+import qualified Filesystem.Path.CurrentOS as Path
 
 import Control.Monad.Trans.State (get, gets, put, modify)
 import Control.Exception (throw)
@@ -18,6 +18,7 @@ import Data.Typeable (Typeable)
 import Data.Maybe (isJust)
 import Data.Conduit ( ($$) )
 import Data.Conduit.Network (Application, sinkSocket, sourceSocket)
+import qualified Data.Text.Encoding as T
 
 import Network.FTP.Monad
 import qualified Network.FTP.Socket as NS
@@ -29,6 +30,14 @@ data ApplicationQuit = ApplicationQuit
     deriving (Show, Typeable)
 
 instance Exception ApplicationQuit
+
+-- | encode file path.
+encode :: FilePath -> ByteString
+encode = T.encodeUtf8 . either id id . Path.toText
+
+-- | decode file path.
+decode :: ByteString -> FilePath
+decode = Path.fromText . T.decodeUtf8
 
 {-
  - check auth state before run command.
