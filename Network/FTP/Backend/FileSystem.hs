@@ -29,8 +29,8 @@ import qualified Data.Conduit.List as C
 import qualified Data.Conduit.Binary as C
 import qualified Data.Conduit.Process as C
 
+import Network.FTP.Utils (dropHeadingPathSeparator)
 import Network.FTP.Backend (FTPBackend(..))
-import Network.FTP.Backend.Utils (dropHeadingPathSeparator)
 
 data FSConf = FSConf
   { fsBase :: FilePath
