@@ -1,11 +1,13 @@
+{-# LANGUAGE ViewPatterns #-}
 import System.Environment (getArgs)
-import Filesystem.Path.CurrentOS
-import Network.FTP.Server
-import Network.FTP.Backend.FileSystem
+import Filesystem.Path.CurrentOS (decodeString)
+import Data.Conduit.Network (runTCPServer, serverSettings, HostPreference(HostAny))
+import Network.FTP.Server (ftpServer)
+import Network.FTP.Backend.FileSystem (runFSBackend, FSConf(FSConf))
 
 main :: IO ()
 main = do
-    [d] <- getArgs
-    let serverConf = ServerSettings 8000 HostAny
+    [read -> port, d] <- getArgs
+    let serverConf = serverSettings port HostAny True
     runFSBackend (FSConf (decodeString d)) $
         runTCPServer serverConf ftpServer

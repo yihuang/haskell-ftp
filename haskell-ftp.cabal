@@ -71,7 +71,7 @@ library
                      , system-filepath ==0.4.*
                      , network ==2.3.*
                      , conduit ==0.5.*
-                     , network-conduit ==0.5.*
+                     , network-conduit >=0.6.1
                      , process-conduit ==0.5.*
 
 executable simple-ftp-server
@@ -91,6 +91,6 @@ executable simple-ftp-server
                      , system-filepath ==0.4.*
                      , network ==2.3.*
                      , conduit ==0.5.*
-                     , network-conduit ==0.5.*
+                     , network-conduit >=0.6.1
                      , process-conduit ==0.5.*
 

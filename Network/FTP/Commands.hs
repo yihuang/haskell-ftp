@@ -16,7 +16,8 @@ import qualified Data.CaseInsensitive as CI
 import Data.Typeable (Typeable)
 import Data.Maybe (isJust)
 import Data.Conduit ( ($$) )
-import Data.Conduit.Network (Application, sinkSocket, sourceSocket)
+import Data.Conduit.Network (Application, sinkSocket, sourceSocket, appSource, appSink)
+import Data.Conduit.Network.Internal (AppData(..))
 
 import Network.FTP.Monad
 import qualified Network.FTP.Socket as NS
@@ -119,9 +120,14 @@ runTransfer app = do
 
         PasvChannel sock ->
             Lifted.finally
-              (do (csock, _) <- liftIO $ NS.accept sock
+              (do (csock, addr) <- liftIO $ NS.accept sock
                   lift $ Lifted.finally
-                           (app (sourceSocket csock) (sinkSocket csock))
+                           (app AppData
+                               { appSource    = sourceSocket csock
+                               , appSink      = sinkSocket csock
+                               , appSockAddr  = addr
+                               , appLocalAddr = Nothing
+                               })
                            (liftIO (NS.sClose csock))
               )
               (liftIO (NS.sClose sock))
@@ -133,7 +139,12 @@ runTransfer app = do
                 NS.connect sock addr
                 return sock
             lift $ Lifted.finally
-                     (app (sourceSocket sock) (sinkSocket sock))
+                     (app AppData
+                         { appSource    = sourceSocket sock
+                         , appSink      = sinkSocket sock
+                         , appSockAddr  = addr
+                         , appLocalAddr = Nothing
+                         })
                      (liftIO (NS.sClose sock))
 
     reply "226" "Closing data connection; transfer complete."
@@ -141,12 +152,12 @@ runTransfer app = do
 cmd_list :: FTPBackend m => Command m
 cmd_list dir = do
     dir' <- ftpAbsolute (decode dir)
-    runTransfer $ \_ snk -> list dir' $$ snk
+    runTransfer $ \ad -> list dir' $$ (appSink ad)
 
 cmd_nlst :: FTPBackend m => Command m
 cmd_nlst dir = do
     dir' <- ftpAbsolute (decode dir)
-    runTransfer $ \_ snk -> nlst dir' $$ snk
+    runTransfer $ \ad -> nlst dir' $$ (appSink ad)
 
 cmd_noop :: FTPBackend m => Command m
 cmd_noop _ = reply "200" "OK"
@@ -161,13 +172,13 @@ cmd_retr :: FTPBackend m => Command m
 cmd_retr "" = reply "501" "Filename required"
 cmd_retr name = do
     name' <- ftpAbsolute (decode name)
-    runTransfer $ \_ snk -> download name' $$ snk
+    runTransfer $ \ad -> download name' $$ (appSink ad)
 
 cmd_stor :: FTPBackend m => Command m
 cmd_stor ""   = reply "501" "Filename required"
 cmd_stor name = do
     name' <- ftpAbsolute (decode name)
-    runTransfer $ \src _ -> src $$ upload name'
+    runTransfer $ \ad -> (appSource ad) $$ upload name'
 
 cmd_syst :: FTPBackend m => Command m
 cmd_syst _ = reply "215" "UNIX Type: L8"
