@@ -10,13 +10,14 @@ name:                haskell-ftp
 -- PVP summary:      +-+------- breaking API changes
 --                   | | +----- non-breaking API additions
 --                   | | | +--- code changes with no API change
-version:             0.1.0.0
+version:             0.1.0.1
 
 -- A short (one-line) description of the package.
--- synopsis:            
+synopsis:            A Haskell ftp server with configurable backend.
 
 -- A longer description of the package.
--- description:         
+description:         See home page (https://github.com/yihuang/haskell-ftp)
+homepage:            https://github.com/yihuang/haskell-ftp
 
 -- The license under which the package is released.
 license:             BSD3
@@ -41,6 +42,9 @@ build-type:          Simple
 -- Constraint on the version of Cabal needed to build this package.
 cabal-version:       >=1.8
 
+source-repository head
+  type:     git
+  location: git://github.com/yihuang/haskell-ftp
 
 library
   ghc-options:       -Wall -O2
